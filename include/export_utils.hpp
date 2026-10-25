@@ -5,11 +5,11 @@
 #include <vector>
 
 namespace export_csv {
-    void export_loss_to_csv(const std::vector<double>& losses, const std::string& filename) {
+    void export_loss_to_csv(const std::vector<double>& losses, const std::string& filename, int first_epoch = 1) {
         std::ofstream file(filename);
         file << "Epoch,Loss\n";
         for(size_t i = 0; i < losses.size(); ++i) {
-            file << (i + 1) << "," << losses[i] << "\n";
+            file << (i + first_epoch) << "," << losses[i] << "\n";
         }
         file.close();
         std::cout << "[INFO] Exported loss to " << filename << std::endl;

@@ -55,8 +55,8 @@ int main(int argc, char* argv[]) {
     torch::Tensor initial_price = compute_bs_price(torch::full({num_paths, 1}, params.S0, device), K, params.r, torch::full({num_paths, 1}, params.v0, device), T, device);
 
     // ----- Paths -----
-    std::string best_model_temp_path = std::format("../results/outputs/models/model_best_cost_rate_{}.pt", cost_rate);
-    std::string ref_model_path = "../results/outputs/models/model_best_cost_rate_0.pt";
+    std::string best_model_temp_path = std::format("../results/experiments/longer_finetuning/models/model_best_cost_rate_{}.pt", cost_rate);
+    std::string ref_model_path = "../results/experiments/longer_finetuning/models/model_best_cost_rate_0.pt";
 
 
     // ----- Evaluation paths -----
@@ -75,9 +75,9 @@ int main(int argc, char* argv[]) {
     // ===============================================================
     {
         torch::NoGradGuard no_grad; // No gradient tracking anymore
-        std::filesystem::create_directories("../results/outputs/pnl");
-        std::filesystem::create_directories("../results/outputs/metrics");
-        std::filesystem::create_directories("../results/outputs/deltas");
+        std::filesystem::create_directories("../results/experiments/longer_finetuning/pnl");
+        std::filesystem::create_directories("../results/experiments/longer_finetuning/metrics");
+        std::filesystem::create_directories("../results/experiments/longer_finetuning/deltas");
         int pricing_num_paths = eval_num_paths;
         // New test paths, generated after selecting the best model.
         auto [S_final, V_final] = simulation_eval.generate_paths();
@@ -126,11 +126,11 @@ int main(int argc, char* argv[]) {
         torch::Tensor total_cost_ref = torch::zeros({pricing_num_paths, 1}, device);
         
         
-        std::ofstream path_log(std::format("../results/outputs/deltas/single_path_deltas_cost_rate_{}.csv", cost_rate));
+        std::ofstream path_log(std::format("../results/experiments/longer_finetuning/deltas/single_path_deltas_cost_rate_{}.csv", cost_rate));
         path_log << "TimeStep,Price,Delta_BS,Transaction_Cost_BS,Delta_NN,Transaction_Cost_NN,Delta_Ref,Transaction_Cost_Ref\n";
 
         int logged_num_paths = std::min(1000, pricing_num_paths);
-        std::ofstream deltas_log(std::format("../results/outputs/deltas/sample_path_deltas_cost_rate_{}.csv", cost_rate));
+        std::ofstream deltas_log(std::format("../results/experiments/longer_finetuning/deltas/sample_path_deltas_cost_rate_{}.csv", cost_rate));
         deltas_log << "Path,TimeStep,Price,Variance,Delta_BS,Delta_Ref,Delta_NN\n";
         deltas_log << std::setprecision(9);
 
@@ -240,7 +240,7 @@ int main(int argc, char* argv[]) {
         torch::Tensor path_metrics = torch::cat({turnover_bs, turnover_nn, turnover_ref,
                                                 total_cost_bs, total_cost_nn, total_cost_ref}, 1).to(torch::kCPU).contiguous();
         auto metrics = path_metrics.accessor<float, 2>();
-        std::string metrics_path = std::format("../results/outputs/metrics/final_path_metrics_cost_rate_{}.csv", cost_rate);
+        std::string metrics_path = std::format("../results/experiments/longer_finetuning/metrics/final_path_metrics_cost_rate_{}.csv", cost_rate);
         std::ofstream metrics_log(metrics_path);
         metrics_log << "Path,Turnover_BS,Turnover_NN,Turnover_Ref,Total_Cost_BS,Total_Cost_NN,Total_Cost_Ref\n";
         metrics_log << std::setprecision(9);
@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
         torch::Tensor quantiles = torch::quantile(path_metrics, torch::tensor({0.05f, 0.5f, 0.95f}), 0);
         std::vector<std::string> metric_names = {"Turnover_BS", "Turnover_NN", "Turnover_Ref",
                                                  "Total_Cost_BS", "Total_Cost_NN", "Total_Cost_Ref"};
-        std::ofstream summary_log(std::format("../results/outputs/metrics/final_path_metrics_summary_cost_rate_{}.csv", cost_rate));
+        std::ofstream summary_log(std::format("../results/experiments/longer_finetuning/metrics/final_path_metrics_summary_cost_rate_{}.csv", cost_rate));
         summary_log << "Metric,Mean,P05,Median,P95\n";
         summary_log << std::setprecision(9);
         for (int column = 0; column < 6; ++column) {
@@ -285,12 +285,12 @@ int main(int argc, char* argv[]) {
         std::cout << "Ref (trained on cost_rate=0) CVaR Loss: " << loss_ref.item<double>() << std::endl;
 
 
-        export_csv::export_pnl_to_csv(pnl_bs, std::format("../results/outputs/pnl/final_pnl_bs_cost_rate_{}.csv", cost_rate));
-        export_csv::export_pnl_to_csv(pnl_nn, std::format("../results/outputs/pnl/final_pnl_nn_cost_rate_{}.csv", cost_rate));
-        export_csv::export_pnl_to_csv(pnl_ref, std::format("../results/outputs/pnl/final_pnl_ref_cost_rate_{}.csv", cost_rate));
-        export_csv::export_pnl_to_csv(pnl_nn_raw, std::format("../results/outputs/pnl/final_pnl_nn_raw_cost_rate_{}.csv", cost_rate));
-        export_csv::export_pnl_to_csv(pnl_bs_raw, std::format("../results/outputs/pnl/final_pnl_bs_raw_cost_rate_{}.csv", cost_rate));
-        export_csv::export_pnl_to_csv(pnl_ref_raw, std::format("../results/outputs/pnl/final_pnl_ref_raw_cost_rate_{}.csv", cost_rate));
+        export_csv::export_pnl_to_csv(pnl_bs, std::format("../results/experiments/longer_finetuning/pnl/final_pnl_bs_cost_rate_{}.csv", cost_rate));
+        export_csv::export_pnl_to_csv(pnl_nn, std::format("../results/experiments/longer_finetuning/pnl/final_pnl_nn_cost_rate_{}.csv", cost_rate));
+        export_csv::export_pnl_to_csv(pnl_ref, std::format("../results/experiments/longer_finetuning/pnl/final_pnl_ref_cost_rate_{}.csv", cost_rate));
+        export_csv::export_pnl_to_csv(pnl_nn_raw, std::format("../results/experiments/longer_finetuning/pnl/final_pnl_nn_raw_cost_rate_{}.csv", cost_rate));
+        export_csv::export_pnl_to_csv(pnl_bs_raw, std::format("../results/experiments/longer_finetuning/pnl/final_pnl_bs_raw_cost_rate_{}.csv", cost_rate));
+        export_csv::export_pnl_to_csv(pnl_ref_raw, std::format("../results/experiments/longer_finetuning/pnl/final_pnl_ref_raw_cost_rate_{}.csv", cost_rate));
 
     }
     return 0;

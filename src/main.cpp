@@ -54,9 +54,9 @@ int main(int argc, char* argv[]) {
     torch::Tensor initial_price = compute_bs_price(torch::full({num_paths, 1}, params.S0, device), K, params.r, torch::full({num_paths, 1}, params.v0, device), T, device);
 
     // ----- Paths -----
-    std::filesystem::create_directories("../results/outputs/models");
-    std::string best_model_temp_path = std::format("../results/outputs/models/model_best_cost_rate_{}.pt", cost_rate);
-    std::string ref_model_path = "../results/outputs/models/model_best_cost_rate_0.pt";
+    std::filesystem::create_directories("../results/experiments/longer_finetuning/models");
+    std::string best_model_temp_path = std::format("../results/experiments/longer_finetuning/models/model_best_cost_rate_{}.pt", cost_rate);
+    std::string ref_model_path = "../results/experiments/longer_finetuning/models/model_best_cost_rate_0.pt";
 
     // ----- Evaluation paths -----
     int eval_num_paths = num_paths * 10;
@@ -95,47 +95,51 @@ int main(int argc, char* argv[]) {
     std::vector<double> loss_history;
     torch::Tensor pnl;
 
-    for (int64_t epoch = 0; epoch < kNumberOfEpochs; ++epoch) {
-        optimizer.zero_grad();
-        // Generation of new paths to avoid overfitting
-        auto [S, V] = simulation.generate_paths();
-        auto log_S = torch::log(S);
-        auto underlying_change = S.slice(1, 1, num_time_steps+1) - S.slice(1, 0, num_time_steps) * exp_r_dt;
-        auto sqrt_V = torch::sqrt(V);
+    for (int64_t epoch = 0; epoch <= kNumberOfEpochs; ++epoch) {
+        // Epoch 0 evaluates the starting checkpoint before any update.
+        if (epoch > 0) {
+            optimizer.zero_grad();
+            // Generation of new paths to avoid overfitting
+            auto [S, V] = simulation.generate_paths();
+            auto log_S = torch::log(S);
+            auto underlying_change = S.slice(1, 1, num_time_steps+1) - S.slice(1, 0, num_time_steps) * exp_r_dt;
+            auto sqrt_V = torch::sqrt(V);
 
-        // Time evolution
-        torch::Tensor payoff = european_option_payoff(S.slice(1, num_time_steps, num_time_steps + 1), K);
+            // Time evolution
+            torch::Tensor payoff = european_option_payoff(S.slice(1, num_time_steps, num_time_steps + 1), K);
 
-        torch::Tensor portfolio = initial_price.clone();
-        torch::Tensor held_position = torch::zeros({num_paths, 1}, device); // position before rebalancing
+            torch::Tensor portfolio = initial_price.clone();
+            torch::Tensor held_position = torch::zeros({num_paths, 1}, device); // position before rebalancing
 
-        for (int64_t t = 0; t <= num_time_steps; ++t) {
-            // At t = 0, there is no previous interval to accrue.
-            if (t > 0) {
-                portfolio = portfolio * exp_r_dt + held_position * underlying_change.slice(1, t-1, t);
+            for (int64_t t = 0; t <= num_time_steps; ++t) {
+                // At t = 0, there is no previous interval to accrue.
+                if (t > 0) {
+                    portfolio = portfolio * exp_r_dt + held_position * underlying_change.slice(1, t-1, t);
+                }
+
+                torch::Tensor target_position;
+                if (t < num_time_steps) {
+                    torch::Tensor input = torch::cat({log_S.slice(1, t, t+1),
+                                            sqrt_V.slice(1, t, t+1),
+                                            torch::full({num_paths, 1},T - (t * simulation.dt), device),
+                                            held_position}, 1);
+                    target_position = model->forward(input);
+                } else {
+                    target_position = torch::zeros({num_paths, 1}, device); // liquidation at t = N
+                }
+                torch::Tensor transaction_cost = cost_rate * torch::abs(target_position - held_position) * S.slice(1, t, t+1);
+
+                portfolio = portfolio - transaction_cost;
+                held_position = target_position;
             }
 
-            torch::Tensor target_position;
-            if (t < num_time_steps) {
-                torch::Tensor input = torch::cat({log_S.slice(1, t, t+1),
-                                        sqrt_V.slice(1, t, t+1),
-                                        torch::full({num_paths, 1},T - (t * simulation.dt), device),
-                                        held_position}, 1);
-                target_position = model->forward(input);
-            } else {
-                target_position = torch::zeros({num_paths, 1}, device); // liquidation at t = N
-            }
-            torch::Tensor transaction_cost = cost_rate * torch::abs(target_position - held_position) * S.slice(1, t, t+1);
+            pnl = portfolio - payoff;
+            torch::Tensor train_loss = cvar_loss(pnl, alpha);
+            train_loss.backward();
+            torch::nn::utils::clip_grad_norm_(model->parameters(), 1.0);
+            optimizer.step();
 
-            portfolio = portfolio - transaction_cost;
-            held_position = target_position;
         }
-
-        pnl = portfolio - payoff;
-        torch::Tensor train_loss = cvar_loss(pnl, alpha);
-        train_loss.backward();
-        torch::nn::utils::clip_grad_norm_(model->parameters(), 1.0);
-        optimizer.step();
 
         // Evaluation
         double current_loss;
@@ -178,16 +182,16 @@ int main(int argc, char* argv[]) {
 
         // History
         loss_history.push_back(current_loss);
-        if (epoch % 100 == 0 || epoch == kNumberOfEpochs - 1) {
-            std::cout << "Epoch [" << epoch + 1 << "/" << kNumberOfEpochs 
+        if (epoch % 100 == 0 || epoch == kNumberOfEpochs) {
+            std::cout << "Epoch [" << epoch << "/" << kNumberOfEpochs
                       << "], Loss: " << current_loss 
                       << ", LR: "<< optimizer.param_groups()[0].options().get_lr() 
                       << std::endl;
         }
     }
 
-    std::filesystem::create_directories("../results/outputs/losses");
-    export_csv::export_loss_to_csv(loss_history, std::format("../results/outputs/losses/loss_history_cost_rate_{}.csv", cost_rate));
+    std::filesystem::create_directories("../results/experiments/longer_finetuning/losses");
+    export_csv::export_loss_to_csv(loss_history, std::format("../results/experiments/longer_finetuning/losses/loss_history_cost_rate_{}.csv", cost_rate), 0);
 
     return 0;
 }

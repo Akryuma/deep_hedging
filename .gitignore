@@ -11,4 +11,13 @@ libtorch
 # raw outputs
 results/outputs/*
 !results/outputs/models
-results/experiments/*
+
+# experimental outputs
+results/experiments/**
+!results/experiments/longer_finetuning/
+!results/experiments/longer_finetuning/models/
+!results/experiments/longer_finetuning/models/*.pt
+!results/experiments/longer_finetuning/losses/
+!results/experiments/longer_finetuning/losses/*.csv
+!results/experiments/longer_finetuning/metrics/
+!results/experiments/longer_finetuning/metrics/final_path_metrics_summary_cost_rate_0.01.csv
