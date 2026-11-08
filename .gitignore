@@ -1,0 +1,14 @@
+# ENV
+.venv
+
+# python
+__pycache__/
+
+# C++
+build/*
+libtorch
+
+# raw outputs
+results/outputs/*
+!results/outputs/models
+results/experiments/*

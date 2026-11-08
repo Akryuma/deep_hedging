@@ -1,0 +1,26 @@
+[project]
+name = "deep-hedging"
+version = "0.1.0"
+description = "Project dependencies for deep hedging"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "numpy",
+  "pandas",
+  "plotly",
+  "matplotlib",
+  "seaborn",
+  "scipy",
+  "torch",
+  "torchvision",
+  "ipykernel",
+  "nbformat>=4.2.0"
+]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchvision = { index = "pytorch" }
